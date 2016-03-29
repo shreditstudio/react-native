@@ -224,7 +224,12 @@ public final class NetworkingModule extends ReactContextBaseJavaModule {
       }
       requestBuilder.method(
           method,
-          RequestBodyUtil.create(MediaType.parse(contentType), fileInputStream));
+          RequestBodyUtil.create(MediaType.parse(contentType), fileInputStream, new RequestBodyUtil.UploadProgressCallback() {
+            @Override
+            public void onProgress(long loaded, long total) {
+              onUploadProgress(executorToken, requestId, loaded, total);
+            }
+          }));
     } else if (data.hasKey(REQUEST_BODY_KEY_FORMDATA)) {
       if (contentType == null) {
         contentType = "multipart/form-data";
@@ -335,6 +340,15 @@ public final class NetworkingModule extends ReactContextBaseJavaModule {
     getEventEmitter(ExecutorToken).emit("didReceiveNetworkResponse", args);
   }
 
+  private void onUploadProgress(ExecutorToken executorToken, int requestId, long loaded, long total) {
+    WritableArray args = Arguments.createArray();
+    args.pushInt(requestId);
+    args.pushDouble(loaded);
+    args.pushDouble(total);
+
+    getEventEmitter(executorToken).emit("didSendNetworkData", args);
+  }
+
   private static WritableMap translateHeaders(Headers headers) {
     WritableMap responseHeaders = Arguments.createMap();
     for (int i = 0; i < headers.size(); i++) {
@@ -375,11 +389,13 @@ public final class NetworkingModule extends ReactContextBaseJavaModule {
     return true;
   }
 
-  private @Nullable MultipartBody.Builder constructMultipartBody(
-      ExecutorToken ExecutorToken,
+  private
+  @Nullable
+  MultipartBody.Builder constructMultipartBody(
+      final ExecutorToken ExecutorToken,
       ReadableArray body,
       String contentType,
-      int requestId) {
+      final int requestId) {
     MultipartBody.Builder multipartBuilder = new MultipartBody.Builder();
     multipartBuilder.setType(MediaType.parse(contentType));
 
@@ -429,7 +445,12 @@ public final class NetworkingModule extends ReactContextBaseJavaModule {
               null);
           return null;
         }
-        multipartBuilder.addPart(headers, RequestBodyUtil.create(partContentType, fileInputStream));
+        multipartBuilder.addPart(headers, RequestBodyUtil.create(partContentType, fileInputStream, new RequestBodyUtil.UploadProgressCallback() {
+          @Override
+          public void onProgress(long loaded, long total) {
+            onUploadProgress(ExecutorToken, requestId, loaded, total);
+          }
+        }));
       } else {
         onRequestError(ExecutorToken, requestId, "Unrecognized FormData part.", null);
       }

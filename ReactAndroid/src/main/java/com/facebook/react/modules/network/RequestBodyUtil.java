@@ -30,6 +30,7 @@ import okio.BufferedSink;
 import okio.ByteString;
 import okio.Okio;
 import okio.Source;
+import okio.Buffer;
 
 /**
  * Helper class that provides the necessary methods for creating the RequestBody from a file
@@ -82,10 +83,14 @@ import okio.Source;
     return RequestBody.create(mediaType, gzipByteArrayOutputStream.toByteArray());
   }
 
+  public static RequestBody create(final MediaType mediaType, final InputStream inputStream) {
+    return create(mediaType, inputStream, null);
+  }
+
   /**
    * Creates a RequestBody from a mediaType and inputStream given.
    */
-  public static RequestBody create(final MediaType mediaType, final InputStream inputStream) {
+  public static RequestBody create(final MediaType mediaType, final InputStream inputStream, final UploadProgressCallback progress) {
     return new RequestBody() {
       @Override
       public MediaType contentType() {
@@ -106,7 +111,21 @@ import okio.Source;
         Source source = null;
         try {
           source = Okio.source(inputStream);
-          sink.writeAll(source);
+          if (progress == null) {
+            sink.writeAll(source);
+          } else {
+            Buffer buf = new Buffer();
+            Long remaining = contentLength();
+            for (long readCount; (readCount = source.read(buf, 2048)) != -1; ) {
+              sink.write(buf, readCount);
+              remaining -= readCount;
+
+              long loaded = remaining;
+              long total = contentLength();
+
+              progress.onProgress(loaded, total);
+            }
+          }
         } finally {
           Util.closeQuietly(source);
         }
@@ -123,5 +142,9 @@ import okio.Source;
     } else {
       return null;
     }
+  }
+
+  public interface UploadProgressCallback {
+    void onProgress(long loaded, long total);
   }
 }

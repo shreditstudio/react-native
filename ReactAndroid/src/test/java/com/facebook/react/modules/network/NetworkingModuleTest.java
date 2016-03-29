@@ -376,7 +376,8 @@ public class NetworkingModuleTest {
     PowerMockito.mockStatic(RequestBodyUtil.class);
     when(RequestBodyUtil.getFileInputStream(any(ReactContext.class), any(String.class)))
         .thenReturn(inputStream);
-    when(RequestBodyUtil.create(any(MediaType.class), any(InputStream.class))).thenCallRealMethod();
+    when(RequestBodyUtil.create(any(MediaType.class), any(InputStream.class),
+      any(RequestBodyUtil.UploadProgressCallback.class))).thenCallRealMethod();
     when(inputStream.available()).thenReturn("imageUri".length());
 
     final MultipartBody.Builder multipartBuilder = mock(MultipartBody.Builder.class);
@@ -454,7 +455,7 @@ public class NetworkingModuleTest {
     PowerMockito.verifyStatic(times(1));
     RequestBodyUtil.getFileInputStream(any(ReactContext.class), eq("imageUri"));
     PowerMockito.verifyStatic(times(1));
-    RequestBodyUtil.create(MediaType.parse("image/jpg"), inputStream);
+    RequestBodyUtil.create(eq(MediaType.parse("image/jpg")), eq(inputStream), any(RequestBodyUtil.UploadProgressCallback.class));
 
     // verify body
     verify(multipartBuilder).build();
