@@ -23,6 +23,7 @@
   // Use NSMapTable, as UIAlertViews do not implement <NSCopying>
   // which is required for NSDictionary keys
   NSMapTable *_callbacks;
+  NSMapTable *_shouldWaitForDismiss;
 }
 
 RCT_EXPORT_MODULE()
@@ -58,6 +59,10 @@ RCT_EXPORT_METHOD(showActionSheetWithOptions:(NSDictionary *)options
 
   if (!_callbacks) {
     _callbacks = [NSMapTable strongToStrongObjectsMapTable];
+  }
+
+  if (!_shouldWaitForDismiss) {
+    _shouldWaitForDismiss = [NSMapTable strongToStrongObjectsMapTable];
   }
 
   NSString *title = [RCTConvert NSString:options[@"title"]];
@@ -100,6 +105,10 @@ RCT_EXPORT_METHOD(showActionSheetWithOptions:(NSDictionary *)options
     actionSheet.delegate = self;
 
     [_callbacks setObject:callback forKey:actionSheet];
+
+    if ([RCTConvert BOOL:options[@"waitForDismissal"]]) {
+      [_shouldWaitForDismiss setObject:@YES forKey:actionSheet];
+    }
 
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
       [actionSheet showFromRect:sourceRect inView:sourceView animated:YES];
@@ -238,10 +247,24 @@ RCT_EXPORT_METHOD(showShareActionSheetWithOptions:(NSDictionary *)options
 {
   RCTResponseSenderBlock callback = [_callbacks objectForKey:actionSheet];
   if (callback) {
-    callback(@[@(buttonIndex)]);
-    [_callbacks removeObjectForKey:actionSheet];
+    BOOL waitForDismissal = [_shouldWaitForDismiss objectForKey:actionSheet];
+    if (!waitForDismissal) {
+      callback(@[@(buttonIndex)]);
+      [_callbacks removeObjectForKey:actionSheet];
+    }
   } else {
     RCTLogWarn(@"No callback registered for action sheet: %@", actionSheet.title);
+  }
+}
+
+- (void) actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex
+{
+  RCTResponseSenderBlock callback = [_callbacks objectForKey:actionSheet];
+  BOOL waitForDismissal = [_shouldWaitForDismiss objectForKey:actionSheet];
+  if (callback && waitForDismissal) {
+    callback(@[@(buttonIndex)]);
+    [_callbacks removeObjectForKey:actionSheet];
+    [_shouldWaitForDismiss removeObjectForKey:actionSheet];
   }
 }
 
